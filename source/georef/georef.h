@@ -75,7 +75,7 @@ struct Edge {
   * les arcs sont orientés
   * les propriétés des nœuds et arcs sont les classes définies précédemment
   */
-typedef boost::adjacency_list<boost::vecS, boost::vecS, boost::directedS, Vertex, Edge> Graph;
+typedef boost::adjacency_list<boost::vecS, boost::vecS, boost::bidirectionalS, Vertex, Edge> Graph;
 
 /// Représentation d'un nœud dans le g,raphe
 typedef boost::graph_traits<Graph>::vertex_descriptor vertex_t;

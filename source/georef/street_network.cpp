@@ -12,7 +12,7 @@ bt::time_duration get_walking_duration(const double val) {
 StreetNetwork::StreetNetwork(const GeoRef &geo_ref) :
     geo_ref(geo_ref),
     departure_path_finder(geo_ref),
-    arrival_path_finder(geo_ref)
+    arrival_path_finder(geo_ref, true)
 {}
 
 void StreetNetwork::init(const type::EntryPoint& start, boost::optional<const type::EntryPoint&> end) {
