@@ -68,6 +68,27 @@ struct TransportationModeFilter {
     }
 };
 
+struct identity_graph_wrapper {
+    using graph_t = Graph;
+
+    template <typename Graph>
+    inline Graph get_graph(Graph graph) const {
+        return graph;
+    }
+};
+
+struct reverse_graph_wrapper {
+
+    template <typename Graph>
+    using graph_t = boost::reverse_graph<Graph>;
+
+    template <typename Graph>
+    inline graph_t<Graph> get_graph(Graph graph) const {
+        return graph_t<Graph>(graph);
+    }
+};
+
+template <typename graph_wrapper_trait>
 struct PathFinder {
     const GeoRef & geo_ref;
 
@@ -88,7 +109,6 @@ struct PathFinder {
     std::vector<vertex_t> predecessors;
 
     PathFinder(const GeoRef& geo_ref);
-    PathFinder(const GeoRef& geo, bool r) : geo_ref(geo), reverse(r) {}
 
     /**
      *  Update the structure for a given starting point and transportation mode
@@ -121,57 +141,23 @@ struct PathFinder {
         // Note: the predecessors have been updated in init
         boost::two_bit_color_map<> color(boost::num_vertices(geo_ref.graph));
 
-        //we filter the graph to only use certain mean of transport
         using filtered_graph = boost::filtered_graph<georef::Graph, boost::keep_all, TransportationModeFilter>;
 
-        if (! reverse) {
-            boost::dijkstra_shortest_paths_no_init(filtered_graph(geo_ref.graph, {}, TransportationModeFilter(mode, geo_ref)),
-                                                   start, &predecessors[0], &distances[0],
-                                                   boost::get(&Edge::duration, geo_ref.graph), // weigth map
-                                                   boost::identity_property_map(),
-                                                   std::less<bt::time_duration>(),
-                                                   SpeedDistanceCombiner(speed_factor), //we multiply the edge duration by a speed factor
-                                                   bt::seconds(0),
-                                                   visitor,
-                                                   color
-                                                   );
-        }
-        else {
-            std::cout << "plop ?" << std::endl;
-//            using bob_the_reverse_graph = boost::reverse_graph<georef::Graph>;
-//            bob_the_reverse_graph reverse {geo_ref.graph};
+        filtered_graph filtered{geo_ref.graph, {}, TransportationModeFilter(mode, geo_ref)};
 
-//            using filtered_graph = boost::filtered_graph<bob_the_reverse_graph, boost::keep_all, TransportationModeFilter>;
-//            filtered_graph f(reverse, {}, TransportationModeFilter(mode, geo_ref));
-//            boost::property_map<filtered_graph, bt::time_duration, Edge>::type handle_to_something { boost::get(&Edge::duration, f) };
-//            boost::bundle_property_map<filtered_graph,
-//                    boost::graph_traits<filtered_graph>::edge_descriptor,
-//                    Edge, bt::time_duration> handle_to_something { boost::get(&Edge::duration, f) };
+        const auto graph_custom_view = graph_wrapper_trait().get_graph(filtered);
 
+        boost::dijkstra_shortest_paths_no_init(graph_custom_view,
+                                               start, &predecessors[0], &distances[0],
+                                               boost::get(&Edge::duration, graph_custom_view), // weigth map
+                                               boost::identity_property_map(),
+                                               std::less<bt::time_duration>(),
+                                               SpeedDistanceCombiner(speed_factor), //we multiply the edge duration by a speed factor
+                                               bt::seconds(0),
+                                               visitor,
+                                               color
+                                               );
 
-            filtered_graph f(geo_ref.graph, {}, TransportationModeFilter(mode, geo_ref));
-            using bob_the_reverse_graph = const boost::reverse_graph<filtered_graph, const filtered_graph&>;
-            bob_the_reverse_graph bob {f};
-//            boost::property_map<filtered_graph, bt::time_duration Edge::*>::type handle_to_something { boost::get(&Edge::duration, f) };
-            using bundle_prop = boost::bundle_property_map<
-                    bob_the_reverse_graph,
-                    boost::graph_traits<boost::reverse_graph<filtered_graph, const filtered_graph&>>::edge_descriptor,
-                    Edge,
-                    const bt::time_duration
-                    >;
-            bundle_prop handle_to_something { &bob, &Edge::duration };
-
-            boost::dijkstra_shortest_paths_no_init(bob,
-                                                   start, &predecessors[0], &distances[0],
-                                                   handle_to_something, // weigth map
-                                                   boost::identity_property_map(),
-                                                   std::less<bt::time_duration>(),
-                                                   SpeedDistanceCombiner(speed_factor), //we multiply the edge duration by a speed factor
-                                                   bt::seconds(0),
-                                                   visitor,
-                                                   color
-                                                   );
-        }
     }
 private:
     Path get_path(const ProjectionData& target, std::pair<bt::time_duration, vertex_t> nearest_edge);
@@ -183,35 +169,8 @@ private:
 
     /// find the nearest vertex from the projection. return the distance to this vertex and the vertex
     std::pair<bt::time_duration, vertex_t> find_nearest_vertex(const ProjectionData& target) const;
-
-    bool reverse = false;
 };
 
-struct ReversePathFinder : PathFinder {
-    ReversePathFinder(const GeoRef& geo_ref) : PathFinder(geo_ref) {}
-
-    template<class Visitor>
-    void dijkstra(vertex_t start, Visitor visitor) {
-        // Note: the predecessors have been updated in init
-        boost::two_bit_color_map<> color(boost::num_vertices(geo_ref.graph));
-
-        //we filter the graph to only use certain mean of transport
-        using filtered_graph = boost::filtered_graph<georef::Graph, boost::keep_all, TransportationModeFilter>;
-        using reverse_filtered_graph = boost::reverse_graph<filtered_graph>;
-        std::cout << "plop ?";
-        filtered_graph f(geo_ref.graph, {}, TransportationModeFilter(mode, geo_ref));
-        boost::dijkstra_shortest_paths_no_init(reverse_filtered_graph({geo_ref.graph, {}, TransportationModeFilter(mode, geo_ref)}),
-                                               start, &predecessors[0], &distances[0],
-                                               boost::get(&Edge::duration, geo_ref.graph), // weigth map
-                                               boost::identity_property_map(),
-                                               std::less<bt::time_duration>(),
-                                               SpeedDistanceCombiner(speed_factor), //we multiply the edge duration by a speed factor
-                                               bt::seconds(0),
-                                               visitor,
-                                               color
-                                               );
-    }
-};
 
 /** Structure managing the computation on the streetnetwork */
 class StreetNetwork {
@@ -239,8 +198,8 @@ public:
 
 private:
     const GeoRef & geo_ref;
-    PathFinder departure_path_finder;
-    PathFinder arrival_path_finder;
+    PathFinder<identity_graph_wrapper> departure_path_finder;
+    PathFinder<reverse_graph_wrapper> arrival_path_finder;
 };
 
 // Exception levée dès que l'on trouve une destination

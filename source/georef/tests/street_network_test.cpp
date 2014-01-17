@@ -9,6 +9,7 @@
 #define private public
 #include"georef/street_network.h"
 #undef private
+#include "georef/path_finder_defs.h"
 
 using namespace navitia::georef;
 
@@ -20,7 +21,7 @@ struct computation_results {
     std::vector<bt::time_duration> durations_matrix; //duration matrix
     std::vector<vertex_t> predecessor;
 
-    computation_results(bt::time_duration d, const PathFinder& worker) : duration(d), durations_matrix(worker.distances), predecessor(worker.predecessors) {}
+    computation_results(bt::time_duration d, const PathFinder<identity_graph_wrapper>& worker) : duration(d), durations_matrix(worker.distances), predecessor(worker.predecessors) {}
 
     bool operator ==(const computation_results& other) {
 
@@ -72,7 +73,7 @@ BOOST_AUTO_TEST_CASE(idempotence) {
         }
     }
 
-    PathFinder worker(geo_ref);
+    PathFinder<identity_graph_wrapper> worker(geo_ref);
 
     //we project 2 stations
     type::GeographicalCoord start;

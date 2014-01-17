@@ -24,7 +24,7 @@ using namespace routing;
 using namespace boost::posix_time;
 
 void dump_response(pbnavitia::Response resp, std::string test_name) {
-    bool debug_info = false;
+    bool debug_info = true;
     if (! debug_info)
         return;
     pbnavitia::Journey journey = resp.journeys(0);

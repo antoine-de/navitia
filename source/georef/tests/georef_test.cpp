@@ -8,6 +8,7 @@
 #include "type/data.h"
 #include "builder.h"
 #include "georef/street_network.h"
+#include "georef/path_finder_defs.h"
 #include <boost/graph/detail/adjacency_list.hpp>
 
 struct logger_initialized {
@@ -249,7 +250,7 @@ BOOST_AUTO_TEST_CASE(compute_directions_test) {
 
     sn.init();
 
-    PathFinder path_finder(sn);
+    PathFinder<identity_graph_wrapper> path_finder(sn);
     path_finder.init({0, 0, true}, Mode_e::Walking, 1); //starting from a
     Path p = path_finder.compute_path({4, 4, true}); //going to e
     BOOST_REQUIRE_EQUAL(p.path_items.size(), 2);
@@ -272,7 +273,7 @@ BOOST_AUTO_TEST_CASE(compute_coord){
     //StreetNetwork sn;
     GeoRef sn;
     GraphBuilder b(sn);
-    PathFinder path_finder(sn);
+    PathFinder<identity_graph_wrapper> path_finder(sn);
 
     /*           a+------+b
      *            |      |
