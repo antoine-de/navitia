@@ -261,12 +261,10 @@ Path GeoRef::build_path(std::vector<vertex_t> reverse_path, bool add_one_elt) co
         if (! edge_pair.second) {
             //for one way way, the reverse path obviously cannot work
             LOG4CPLUS_WARN(log4cplus::Logger::getInstance("log"), "impossible to find edge between "
-                           << u << " -> " << v << ", we try the reverse one");
-            //if it still not work we cannot do anything
-            edge_pair = boost::edge(v, u, graph);
-            if (! edge_pair.second) {
-                throw navitia::exception("impossible to find reverse edge");
-            }
+                           << u << " -> " << v );
+            if ( boost::edge(v, u, graph).second)
+                LOG4CPLUS_WARN(log4cplus::Logger::getInstance("log"), "mais on trouve celui inverse...");
+            throw navitia::exception("impossible to find edge to build path");
         }
         edge_t e = edge_pair.first;
 
