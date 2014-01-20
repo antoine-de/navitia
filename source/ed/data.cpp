@@ -6,8 +6,6 @@
 #include <boost/geometry.hpp>
 #include <boost/geometry/geometry.hpp>
 
-
-
 namespace nt = navitia::type;
 namespace ed{
 
@@ -311,30 +309,6 @@ void Data::build_relations(navitia::type::PT_Data &data){
     }
 
    //for(navitia::type::Company & company : data.companies) {}
-}
-
-std::string Data::compute_bounding_box(navitia::type::PT_Data &data) {
-
-    std::vector<navitia::type::GeographicalCoord> bag;
-    for(const navitia::type::StopPoint* sp : data.stop_points) {
-        bag.push_back(sp->coord);
-    }
-    using coord_box = boost::geometry::model::box<navitia::type::GeographicalCoord>;
-    coord_box envelope, buffer;
-    boost::geometry::envelope(bag, envelope);
-    boost::geometry::buffer(envelope, buffer, 0.01);
-
-    std::ostringstream os;
-    os << "{\"type\": \"Polygon\", \"coordinates\": [[";
-    std::string sep = "";
-
-    boost::geometry::box_view<coord_box> view {buffer};
-    for (auto coord : view) {
-        os << sep << "[" << coord.lon() << ", " << coord.lat() << "]";
-        sep = ",";
-    }
-    os << "]]}";
-    return os.str();
 }
 
 // TODO : pour l'instant on construit une route par journey pattern
