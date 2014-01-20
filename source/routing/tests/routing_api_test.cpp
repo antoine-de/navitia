@@ -152,7 +152,7 @@ void add_edges(int edge_idx, georef::GeoRef& geo_ref, int idx_from, int idx_to, 
 }
 
 const bt::time_duration bike_sharing_pickup = seconds(30);
-const bt::time_duration bike_sharing_return = seconds(45);
+const bt::time_duration bike_sharing_return = seconds(30);
 
 void add_bike_sharing_edge(int edge_idx, georef::GeoRef& geo_ref, int idx_from, int idx_to) {
     boost::add_edge(idx_from + geo_ref.offsets[type::Mode_e::Walking],

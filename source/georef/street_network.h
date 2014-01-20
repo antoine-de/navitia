@@ -69,26 +69,27 @@ struct TransportationModeFilter {
 };
 
 struct identity_graph_wrapper {
-    using graph_t = Graph;
+    template <typename G>
+    using graph_t = G;
 
-    template <typename Graph>
-    inline Graph get_graph(Graph graph) const {
+    template <typename graph_type>
+    inline const graph_type& get_graph(const graph_type& graph) const {
         return graph;
     }
 };
 
 struct reverse_graph_wrapper {
 
-    template <typename Graph>
-    using graph_t = boost::reverse_graph<Graph>;
+    template <typename graph>
+    using graph_t = boost::reverse_graph<graph>;
 
-    template <typename Graph>
-    inline graph_t<Graph> get_graph(Graph graph) const {
-        return graph_t<Graph>(graph);
+    template <typename graph_type>
+    inline graph_t<graph_type> get_graph(const graph_type& graph) const {
+        return graph_t<graph_type>(graph);
     }
 };
 
-template <typename graph_wrapper_trait>
+template <typename graph_wrapper_trait = identity_graph_wrapper>
 struct PathFinder {
     const GeoRef & geo_ref;
 
