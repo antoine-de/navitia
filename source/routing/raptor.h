@@ -66,7 +66,8 @@ struct RAPTOR
     ///La journey_pattern est elle valide ?
     boost::dynamic_bitset<> journey_patterns_valides;
     ///L'ordre du premier j: public AbstractRouterourney_pattern point de la journey_pattern
-    queue_t Q;
+    queue_t Q;//REVIEW: traduire les commentaires, et les changer par la meme occaz' je suis pas certain que ca soit encore d'actualite :p
+    //REVIEW: pour les vector je trouve ca pas mal d'indique par quoi c'est indexe, vu que c'est pas dans le type
 
     //Constructeur
     RAPTOR(const navitia::type::Data &data) :

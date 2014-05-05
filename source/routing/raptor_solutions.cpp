@@ -57,12 +57,14 @@ get_solutions(const std::vector<std::pair<type::idx_t, bt::time_duration> > &dep
 
 Solutions
 get_solutions(const std::vector<std::pair<type::idx_t, bt::time_duration> > &departs, const DateTime &dep, bool clockwise, const type::Data & data, bool) {
+    //REVIEW: on peut virer le bool non ?
+
     Solutions result;
     for(auto dep_dist : departs) {
         for(auto journey_pattern : data.pt_data->stop_points[dep_dist.first]->journey_pattern_point_list) {
             Solution d;
             d.count = 0;
-            d.rpidx = journey_pattern->idx;
+            d.rpidx = journey_pattern->idx;//REVIEW: c'est pas mieux journey_pattern_idx comme nom ? ou jp_idx au moins non ?
             d.walking_time = dep_dist.second;
             if(clockwise)
                 d.arrival = dep + d.walking_time.total_seconds();

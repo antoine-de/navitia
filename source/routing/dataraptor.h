@@ -57,7 +57,7 @@ struct dataRAPTOR {
     std::vector<type::StopTime*> st_idx_backward;
     std::vector<size_t> first_stop_time;
     std::vector<size_t> nb_trips;
-    label_vector_t labels_const;
+    label_vector_t labels_const;//REVIEW: faut des commentaires
     label_vector_t labels_const_reverse;
     vector_idx boardings_const;
     std::vector<boost::dynamic_bitset<> > jp_validity_patterns;

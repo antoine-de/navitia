@@ -54,7 +54,8 @@ const type::StopTime* next_valid_pick_up(type::idx_t idx, const type::idx_t end,
     const auto hour = DateTimeUtils::hour(dt);
     for(; idx < end; ++idx) {
         const type::StopTime* st = data.dataRaptor->st_idx_forward[idx];
-        if (st->valid_end(reconstructing_path) && st->valid_hour(hour, true) &&
+        if (st->valid_end(reconstructing_path) && st->valid_hour(hour, true) &&//REVIEW: pourquoi le valid_end ? on est pas sur de vouloir s'arreter a ce stop_time si ?
+                //REVIEW: et pourquoi le clockwise=true dans le valid_hour ? faudrait pas metter le reconstructing_path (d'ailleurs faudrait pas renommer reconstructing_path en clockwise?)?
             ((disruption_active && st->departure_adapted_validity_pattern->check(date)) || ((!disruption_active) && st->departure_validity_pattern->check(date)))
             && st->vehicle_journey->accessible(required_vehicle_properties) ){
                 return st;
@@ -63,7 +64,7 @@ const type::StopTime* next_valid_pick_up(type::idx_t idx, const type::idx_t end,
     return nullptr;
 }
 
-
+//REVIEW: corriger les fautes, c'est un mongol qui a du ecrire ca. pis faudrait renommer le valid_pick_up pour les calendar non ? je trouve ca pas super clair que la fonction ai le meme nom
 /**
  * the valid_pick_up funciton can be called 2 differents ways:
  * - with a date time => we look for the new valid stop time valid the the day of the date time and after the hour of the date time.
@@ -81,7 +82,7 @@ valid_pick_up(const std::vector<uint32_t>::const_iterator begin, type::idx_t idx
     if(first_st != nullptr) {
         return {first_st, dt};
     }
-    idx = begin - data.dataRaptor->departure_times.begin();
+    idx = begin - data.dataRaptor->departure_times.begin();//REVIEW: hum je suis pas sur de comprendre ce que ca fait
     auto working_dt = DateTimeUtils::set(DateTimeUtils::date(dt)+1, 0);
     first_st = next_valid_pick_up(idx, end, working_dt,
         data, reconstructing_path, vehicle_properties,disruption_active);
@@ -140,8 +141,8 @@ earliest_stop_time(const type::JourneyPatternPoint* jpp,
     //On cherche le plus petit stop time de la journey_pattern >= dt.hour()
     auto begin = data.dataRaptor->departure_times.begin() +
             data.dataRaptor->first_stop_time[jpp->journey_pattern->idx] +
-            jpp->order * data.dataRaptor->nb_trips[jpp->journey_pattern->idx];
-    auto end = begin + data.dataRaptor->nb_trips[jpp->journey_pattern->idx];
+            jpp->order * data.dataRaptor->nb_trips[jpp->journey_pattern->idx];//REVIEW: ca serait pas plus clair d'en faire une methode (dans dataRaptor ?) genre get_jpp_stop_times(const jpp*) ->pair (ou split en begin/end) ?
+    auto end = begin + data.dataRaptor->nb_trips[jpp->journey_pattern->idx];//REVIEW: 'trip' c'est dans le papier raptor mais ici c'est plus vehicle_journey non ?
     auto it = std::lower_bound(begin, end, DateTimeUtils::hour(dt),
                                bound_predicate_earliest);
 

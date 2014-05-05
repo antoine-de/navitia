@@ -36,7 +36,7 @@ namespace bt = boost::posix_time;
 namespace navitia { namespace routing {
 
 void RAPTOR::make_queue() {
-    marked_rp.reset();
+    marked_rp.reset();//REVIEW: la je suis vraiment pas sur, mais faudrait pas filer la taille ? (le nombre de sp ou rp)
     marked_sp.reset();
 }
 
@@ -160,7 +160,7 @@ void RAPTOR::clear(const type::Data & data, bool clockwise, DateTime borne) {
     if(clockwise) {
         //Q.assign(data.pt_data->journey_patterns.size(), std::numeric_limits<int>::max());
         memset32<int>(&Q[0], data.pt_data->journey_patterns.size(), std::numeric_limits<int>::max());
-        labels.resize(1);
+        labels.resize(1);//REVIEW: TODO: peut etre qu'il faudrait du coup pas faire un resize aussi violent pour eviter les allocations, surtout que dans le constructeur il est assigne a 20elt
         labels[0] = data.dataRaptor->labels_const;
     } else {
         //Q.assign(data.pt_data->journey_patterns.size(), -1);
@@ -170,7 +170,7 @@ void RAPTOR::clear(const type::Data & data, bool clockwise, DateTime borne) {
     }
 
     b_dest.reinit(data.pt_data->journey_pattern_points.size(), borne);
-    this->make_queue();
+    this->make_queue();//REVIEW: faudrait changer le nom de la fonction je pense
     if(clockwise)
         best_labels.assign(data.pt_data->journey_pattern_points.size(), DateTimeUtils::inf);
     else
@@ -235,10 +235,11 @@ RAPTOR::compute_all(const std::vector<std::pair<type::idx_t, bt::time_duration> 
     auto calc_dep = clockwise ? departures_ : destinations;
     auto calc_dest = clockwise ? destinations : departures_;
 
+    //REVIEW: ca serait pas mieux de renommer la fonction get_solutions ? la c'est vraiment de l'init non ? (et ca enleverait une confusion avec l'autre get_solutions)
     auto departures = get_solutions(calc_dep, departure_datetime, clockwise, data, disruption_active);
     clear_and_init(departures, calc_dest, bound, clockwise);
 
-    boucleRAPTOR(accessibilite_params, clockwise, disruption_active, false, max_transfers);
+    boucleRAPTOR(accessibilite_params, clockwise, disruption_active, false, max_transfers);//REVIEW: pourquoi pas de global pruning sur la premiere passe ?
     //auto tmp = makePathes(calc_dest, bound, accessibilite_params, *this, clockwise, disruption_active);
     //result.insert(result.end(), tmp.begin(), tmp.end());
     // Aucune solution n’a été trouvée :'(
@@ -275,7 +276,7 @@ RAPTOR::isochrone(const std::vector<std::pair<type::idx_t, bt::time_duration> > 
     auto departures = get_solutions(departures_, departure_datetime, true, data, disruption_active);
     clear_and_init(departures, {}, bound, true);
 
-    boucleRAPTOR(accessibilite_params, clockwise, true, max_transfers);
+    boucleRAPTOR(accessibilite_params, clockwise, true, max_transfers);//REVIEW: heu je crois que la ca va pas marcher du tout, ya pas le bon nombre d'arguments, le max_transfers est cale a la place du global pruning :p
 }
 
 
@@ -387,7 +388,7 @@ void RAPTOR::raptor_loop(Visitor visitor, const type::AccessibiliteParams & acce
     uint16_t l_zone = std::numeric_limits<uint16_t>::max();
 
     //this->foot_path(visitor, accessibilite_params.properties);
-    uint32_t nb_jpp_visites = 0;
+    uint32_t nb_jpp_visites = 0;//REVIEW: sert plus a rien a priori
     while(!end && count <= max_transfers) {
         ++count;
         end = true;
@@ -403,7 +404,7 @@ void RAPTOR::raptor_loop(Visitor visitor, const type::AccessibiliteParams & acce
         this->make_queue();
 
         for(const auto & journey_pattern : data.pt_data->journey_patterns) {
-            if(Q[journey_pattern->idx] != std::numeric_limits<int>::max()
+            if(Q[journey_pattern->idx] != std::numeric_limits<int>::max()//REVIEW: pourquoi max et -1 ?
                     && Q[journey_pattern->idx] != -1
                     && journey_patterns_valides.test(journey_pattern->idx)) {
                 nb_jpp_visites ++;
@@ -423,7 +424,7 @@ void RAPTOR::raptor_loop(Visitor visitor, const type::AccessibiliteParams & acce
                         const type::StopTime* st = *it_st;
                         const auto current_time = st->section_end_time(visitor.clockwise(), DateTimeUtils::hour(workingDt));
                         DateTimeUtils::update(workingDt, current_time, visitor.clockwise());
-                        if((l_zone == std::numeric_limits<uint16_t>::max()
+                        if((l_zone == std::numeric_limits<uint16_t>::max()//REVIEW: du coup ca sert a quoi la local_traffic_zone ? si on reste dans al meme zone, on met rien a jour ?
                             || l_zone != st->local_traffic_zone)
                                 && st->valid_end(visitor.clockwise())) {
                             //On stocke le meilleur label, et on marque pour explorer par la suite
@@ -453,7 +454,7 @@ void RAPTOR::raptor_loop(Visitor visitor, const type::AccessibiliteParams & acce
 
                     //Si on peut arriver plus tôt à l'arrêt en passant par une autre journey_pattern
                     const DateTime labels_temp = prec_labels[jpp_idx].dt;
-                    const boarding_type b_type = get_type(this->count-1, jpp_idx);
+                    const boarding_type b_type = get_type(this->count-1, jpp_idx);//REVIEW: tant qu'a faire autant faire prec_labels[jpp_idx].type non ? je trouve ca plus clair
                     if(b_type != boarding_type::uninitialized && b_type != boarding_type::vj &&
                        (boarding == nullptr || visitor.better_or_equal(labels_temp, workingDt, *it_st))) {
                         const auto tmp_st_dt = best_stop_time(jpp, labels_temp,

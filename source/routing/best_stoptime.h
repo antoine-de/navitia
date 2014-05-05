@@ -90,7 +90,8 @@ inline u_int32_t f_departure_time(uint32_t hour, const type::StopTime* st) {
     if((higher_bound < DateTimeUtils::SECONDS_PER_DAY && hour>=lower_bound && hour<=higher_bound) ||
             (higher_bound > DateTimeUtils::SECONDS_PER_DAY && (
                 (hour>=lower_bound && hour <= DateTimeUtils::SECONDS_PER_DAY)
-                 || (hour + DateTimeUtils::SECONDS_PER_DAY) <= higher_bound) )) {
+                 || (hour + DateTimeUtils::SECONDS_PER_DAY) <= higher_bound) )) {//REVIEW: hum et si higher_bound==DateTimeUtils::SECONDS_PER_DAY ?
+        //REVIEW:la fonction est quand meme bien complexe :p
         if(hour < lower_bound)
             hour += DateTimeUtils::SECONDS_PER_DAY;
         const uint32_t x = std::ceil(double(hour - lower_bound) / double(st->headway_secs));
@@ -98,7 +99,7 @@ inline u_int32_t f_departure_time(uint32_t hour, const type::StopTime* st) {
         BOOST_ASSERT((((x*st->headway_secs+lower_bound) - hour)%DateTimeUtils::SECONDS_PER_DAY) <= st->headway_secs);
         return lower_bound + x * st->headway_secs;
     } else {
-        return lower_bound;
+        return lower_bound;//REVIEW: je suis pas sur d'avoir compris ce que fait cette fonction, mais ca me parait etrange qu'on ne tienne pas compte de headway_sec la
     }
 }
 

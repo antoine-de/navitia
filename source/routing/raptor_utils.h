@@ -49,7 +49,7 @@ enum class boarding_type {
 struct Label{
     DateTime dt;
     boarding_type type;
-    const type::JourneyPatternPoint* boarding;
+    const type::JourneyPatternPoint* boarding;//REVIEW: ca doit pas etre super grave (vu que ca coredump pas :p) mais il faut initialiser les variables d'instances
 };
 
 typedef std::pair<int, int> pair_int;

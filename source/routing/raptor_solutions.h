@@ -39,7 +39,7 @@ namespace navitia { namespace routing {
 
 struct Solution {
     type::idx_t rpidx;
-    uint32_t count;
+    uint32_t count;//REVIEW: faudrait des commentaires sur les champs :)
     DateTime arrival, upper_bound;
     float ratio;
     boost::posix_time::time_duration walking_time = {};
