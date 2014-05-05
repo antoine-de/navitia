@@ -72,7 +72,7 @@ inline void memset32(T*buf, uint n, T c)
 
 
 struct best_dest {
-    std::vector<boost::posix_time::time_duration> jpp_idx_duration;
+    std::vector<boost::posix_time::time_duration> jpp_idx_duration;//REVIEW: en fait ca aussi ca pourrait etre sur un int32 non ? on a pas besoin de plus qu'une milliseconde comme precision si ?
     DateTime best_now;
     type::idx_t best_now_jpp_idx;
     size_t count;

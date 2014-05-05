@@ -54,7 +54,7 @@ struct RAPTOR
     std::vector<label_vector_t> labels;
 
     ///Contient les meilleures heures d'arrivées, de départ, ainsi que la façon dont on est arrivé à chaque journey_pattern point
-    std::vector<DateTime> best_labels;
+    std::vector<DateTime> best_labels;//REVIEW: du coup c'est pas un vecteur de label, c'est zarb pour un truc qui s'appelle best_labels :)
     ///Contient tous les points d'arrivée, et la meilleure façon dont on est arrivé à destination
     best_dest b_dest;
     ///Nombre de correspondances effectuées jusqu'à présent

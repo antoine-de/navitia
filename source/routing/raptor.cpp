@@ -43,7 +43,7 @@ void RAPTOR::make_queue() {
 template<class Visitor>
 void
 RAPTOR::journey_pattern_path_connections(const Visitor & visitor) {
-    std::vector<type::idx_t> to_mark;
+    std::vector<type::idx_t> to_mark;//REVIEW: le vecteur ne sert a rien si ? ca pourrait directement etre fait dans la boucle non ? (enfin c'est peut etre pour la clarete du code)
     for(auto jpp_departure_idx = marked_rp.find_first(); jpp_departure_idx != marked_rp.npos; jpp_departure_idx = marked_rp.find_next(jpp_departure_idx)) {
         const auto* jpp_departure = data.pt_data->journey_pattern_points[jpp_departure_idx];
         BOOST_FOREACH(auto &idx_rpc, data.dataRaptor->footpath_rp(visitor.clockwise()).equal_range(jpp_departure_idx)) {
@@ -52,7 +52,7 @@ RAPTOR::journey_pattern_path_connections(const Visitor & visitor) {
 
             type::idx_t jpp_idx = jpp->idx;
             DateTime dt = visitor.combine(labels[count][jpp_departure_idx].dt, rpc->duration);
-            if(get_type(count, jpp_departure_idx) == boarding_type::vj && visitor.comp(dt, best_labels[jpp_idx])) {
+            if(get_type(count, jpp_departure_idx) == boarding_type::vj && visitor.comp(dt, best_labels[jpp_idx])) {//REVIEW: il faudrait pas caler avant le BOOST_FOREACH un if(get_type(count, jpp_departure_idx) == boarding_type::vj) pour eviter de parcourir les connections quand on s'en tape ?
                 labels[count][jpp_idx].dt = dt;
                 best_labels[jpp_idx] = dt;
                 labels[count][jpp_idx].boarding = jpp_departure;
@@ -73,7 +73,7 @@ RAPTOR::journey_pattern_path_connections(const Visitor & visitor) {
 
 
 template<typename Visitor>
-void RAPTOR::foot_path(const Visitor & v, const type::Properties &required_properties) {
+void RAPTOR::foot_path(const Visitor & v, const type::Properties &required_properties) {//REVIEW: foot_path c'est le nom dans l'algo, mais je trouve pas ca ultra clair en fait :)
 
     int last = 0;
     const auto foot_path_list = v.clockwise() ? data.dataRaptor->foot_path_forward :
@@ -84,7 +84,7 @@ void RAPTOR::foot_path(const Visitor & v, const type::Properties &required_prope
         stop_point_idx = marked_sp.find_next(stop_point_idx)) {
         //On cherche le meilleur jpp du stop point
         const type::StopPoint* stop_point = data.pt_data->stop_points[stop_point_idx];
-        if(stop_point->accessible(required_properties)) {
+        if(stop_point->accessible(required_properties)) {//REVIEW: on peut avoir marque un stop point non accessible ?
             DateTime best_arrival = v.worst_datetime();
             type::idx_t best_jpp = type::invalid_idx;
 
@@ -102,7 +102,7 @@ void RAPTOR::foot_path(const Visitor & v, const type::Properties &required_prope
             // Si on a trouvé un journey pattern pour ce stop point
             // NB : l'inverse arrive lorsqu'on a déjà marqué le stop point avec une autre correspondance
             if(best_jpp != type::invalid_idx) {
-                const DateTime best_departure = v.combine(best_arrival, 120);
+                const DateTime best_departure = v.combine(best_arrival, 120);//REVIEW: hum la je pige pas pourquoi 120
                 //On marque tous les journey_pattern points du stop point
                 for(auto jpp : stop_point->journey_pattern_point_list) {
                     type::idx_t jpp_idx = jpp->idx;
@@ -112,7 +112,7 @@ void RAPTOR::foot_path(const Visitor & v, const type::Properties &required_prope
                        current_labels[jpp_idx].type = boarding_type::connection;
                        best_labels[jpp_idx] = best_departure;
 
-                       if(v.comp(jpp->order, Q[jpp->journey_pattern->idx])) {
+                       if(v.comp(jpp->order, Q[jpp->journey_pattern->idx])) {//REVIEW: hum juste pour comprendre, c'est possible que Q contienne un order > alors que c'est le meilleur temps pour arriver au jpp ?
                            Q[jpp->journey_pattern->idx] = jpp->order;
                        }
                     }
@@ -124,7 +124,7 @@ void RAPTOR::foot_path(const Visitor & v, const type::Properties &required_prope
                 //int prec_duration = -1;
                 DateTime next = v.worst_datetime(),
                          previous = current_labels[best_jpp].dt;
-                it += index.first - last;
+                it += index.first - last;//REVIEW: faut un poil plus de commentaires :) je pige pas pourquoi on enleve last
                 const auto end = it + index.second;
 
                 for(; it != end; ++it) {
@@ -134,8 +134,8 @@ void RAPTOR::foot_path(const Visitor & v, const type::Properties &required_prope
                     if(destination->accessible(required_properties)) {
                         for(auto destination_jpp : destination->journey_pattern_point_list) {
                             type::idx_t destination_jpp_idx = destination_jpp->idx;
-                            if(best_jpp != destination_jpp_idx) {
-                                if(v.comp(next, best_labels[destination_jpp_idx]) || next == best_labels[destination_jpp_idx]) {
+                            if(best_jpp != destination_jpp_idx) {//REVIEW: c'est le meme code qu'au dessus, faudrait factoriser
+                                if(v.comp(next, best_labels[destination_jpp_idx]) || next == best_labels[destination_jpp_idx]) {//REVIEW: pourquoi la on accepte les trucs egaux et pas au dessus ?
                                     current_labels[destination_jpp_idx].dt = next;
                                     current_labels[destination_jpp_idx].boarding = data.pt_data->journey_pattern_points[best_jpp];
                                     current_labels[destination_jpp_idx].type = boarding_type::connection;
@@ -412,7 +412,7 @@ void RAPTOR::raptor_loop(Visitor visitor, const type::AccessibiliteParams & acce
                 workingDt = visitor.worst_datetime();
                 typename Visitor::stop_time_iterator it_st;
                 const auto & jpp_to_explore = visitor.journey_pattern_points(
-                                                this->data.pt_data->journey_pattern_points,
+                                                this->data.pt_data->journey_pattern_points,//REVIEW: virer le param jpp
                                                 journey_pattern,Q[journey_pattern->idx]);
                 BOOST_FOREACH(const type::JourneyPatternPoint* jpp, jpp_to_explore) {
                     if(!jpp->stop_point->accessible(accessibilite_params.properties)) {
@@ -428,20 +428,20 @@ void RAPTOR::raptor_loop(Visitor visitor, const type::AccessibiliteParams & acce
                             || l_zone != st->local_traffic_zone)
                                 && st->valid_end(visitor.clockwise())) {
                             //On stocke le meilleur label, et on marque pour explorer par la suite
-                            const DateTime bound = (visitor.comp(best_labels[jpp_idx], b_dest.best_now) || !global_pruning) ?
+                            const DateTime bound = (visitor.comp(best_labels[jpp_idx], b_dest.best_now) || !global_pruning) ?//REVIEW:bon ca va rien changer, mais vaut mieux checker le boolean en premier
                                                     best_labels[jpp_idx] : b_dest.best_now;
 
                             if(visitor.comp(workingDt, bound)) {
                                 working_labels[jpp_idx].dt = workingDt;
                                 working_labels[jpp_idx].boarding = boarding;
                                 working_labels[jpp_idx].type = boarding_type::vj;
-                                best_labels[jpp_idx] = working_labels[jpp_idx].dt;
-                                if(!this->b_dest.add_best(visitor, jpp_idx, working_labels[jpp_idx].dt, this->count)) {
+                                best_labels[jpp_idx] = working_labels[jpp_idx].dt;//REVIEW:ca change rien, mais bon autant caler workingDt non ?
+                                if(!this->b_dest.add_best(visitor, jpp_idx, working_labels[jpp_idx].dt, this->count)) {//REVIEW: je comprend pas pourquoi on ne mark pas les points d'arrivees
                                     this->marked_rp.set(jpp_idx);
                                     this->marked_sp.set(jpp->stop_point->idx);
                                     end = false;
                                 }
-                            } else if(workingDt == bound &&
+                            } else if(workingDt == bound &&//REVIEW: du coup ca ca peut arriver dans quels cas ?
                                       get_type(this->count-1, jpp_idx) == boarding_type::uninitialized &&
                                       b_dest.add_best(visitor, jpp_idx, workingDt, this->count)) {
                                 working_labels[jpp_idx].dt = workingDt;

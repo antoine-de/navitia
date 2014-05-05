@@ -47,7 +47,7 @@ struct dataRAPTOR {
     std::vector<pair_int> footpath_index_forward;
     std::vector<const navitia::type::StopPointConnection*> foot_path_backward;
     std::vector<pair_int> footpath_index_backward;
-    std::multimap<navitia::type::idx_t,const navitia::type::JourneyPatternPointConnection*> footpath_rp_forward;
+    std::multimap<navitia::type::idx_t,const navitia::type::JourneyPatternPointConnection*> footpath_rp_forward;//REVIEW: peut etre qu'il faudrait mettre un vector<vector> vu qu'on peut recuperer direct avec le jpp idx non ?
     std::multimap<navitia::type::idx_t,const navitia::type::JourneyPatternPointConnection*> footpath_rp_backward;
     std::vector<uint32_t> arrival_times;
     std::vector<uint32_t> departure_times;
