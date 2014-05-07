@@ -80,7 +80,7 @@ render_v0(const std::map<stop_point_line, vector_dt_st> &map_route_stop_point,
 
     auto sort_predicate =
         [&](datetime_stop_time d1, datetime_stop_time d2)->bool {
-            auto hour1 = DateTimeUtils::hour(d1.first) % DateTimeUtils::SECONDS_PER_DAY;
+            auto hour1 = DateTimeUtils::hour(d1.first) % DateTimeUtils::SECONDS_PER_DAY;//REVIEW: hum a mon avis ya un bug la non ? on a deja fait le modulo avec le 'hour'
             auto hour2 = DateTimeUtils::hour(d2.first) % DateTimeUtils::SECONDS_PER_DAY;
             return std::abs(hour1 - DateTimeUtils::hour(datetime)) <
                    std::abs(hour2 - DateTimeUtils::hour(datetime));
