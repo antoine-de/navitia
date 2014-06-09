@@ -33,6 +33,7 @@ from flask import Flask, request, url_for
 from flask.ext.restful import fields, reqparse, marshal_with, abort
 from flask.ext.restful.types import boolean
 from jormungandr import i_manager
+from jormungandr.exceptions import RegionNotFound
 from jormungandr.protobuf_to_dict import protobuf_to_dict
 from fields import stop_point, stop_area, line, physical_mode, \
     commercial_mode, company, network, pagination, place,\
@@ -439,6 +440,30 @@ class add_fare_links(object):
         return wrapper
 
 
+def get_region(args):
+    """
+    compute the region the journey has to be computed on
+    The complexity comes from the fact that the regions in jormungandr can overlap
+
+    rules are easy:
+    we fetch the different regions the user can use for 'origin' and 'destination'
+    we do
+
+    """
+    _region = None
+    if args['origin']:
+        region = i_manager.key_of_id(args['origin'])
+
+    if args['destination']:
+        region = i_manager.key_of_id(args['destination'])
+    # else:
+    #    raise RegionNotFound("")
+    if not _region:
+        raise RegionNotFound("cannot find a region with {o} and {d} in the same time")
+
+    return _region
+
+
 class Journeys(ResourceUri):
 
     def __init__(self):
@@ -545,12 +570,7 @@ class Journeys(ResourceUri):
                     abort(503, message="Unable to compute journeys "
                                        "from this object")
         else:
-            if args['origin']:
-                self.region = i_manager.key_of_id(args['origin'])
-            elif args['destination']:
-                self.region = i_manager.key_of_id(args['destination'])
-            # else:
-            #    raise RegionNotFound("")
+            self.region = get_region(args)
 
         #we transform the origin/destination url to add information
         if args['origin']:
