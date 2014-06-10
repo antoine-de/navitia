@@ -41,9 +41,27 @@ from importlib import import_module
 import logging
 from jormungandr.protobuf_to_dict import protobuf_to_dict
 from jormungandr.exceptions import ApiNotFound, RegionNotFound, DeadSocketException
-from jormungandr import app
+from jormungandr import app, authentification
 from jormungandr.instance import Instance
 import traceback
+
+
+def sort_instances(instances):
+    """
+    sort a list of possible instances
+
+    we want first the non free instances then the free ones
+    """
+    def instance_compare(a, b):
+        if a.is_free != b.is_free:
+            # if the boolean is different, we want 1 if a is free, else -1
+            return a.is_free - b.is_free
+        #TODO what to do if we have 2 free instances or 2 private instances ?
+        #TODO it would be better to just return the best one because it is always the wanted behavior
+        return 1  # for the moment we keep the same order
+
+    instances.sort(instance_compare)
+    return instances
 
 
 @singleton
@@ -145,7 +163,8 @@ class InstanceManager(object):
     def key_of_id(self, object_id, only_one=True):
         """ Retrieves the key of the region of a given id
             if it's a coord calls key_of_coord
-            Return the region key, or None if it doesn't exists
+            Return one region key if only_one param is true, or None if it doesn't exists
+            and the list of possible regions if only_one is set to False
         """
         if object_id.count(";") == 1 or object_id[:6] == "coord:":
             if object_id.count(";") == 1:
@@ -158,14 +177,14 @@ class InstanceManager(object):
             except:
                 raise RegionNotFound(object_id=object_id)
             return self.key_of_coord(flon, flat, only_one)
-        else:
-            ptobject = models.PtObject.get_from_uri(object_id)
-            if ptobject:
-                instances = ptobject.instances()
-                if len(instances) > 0:
-                    if only_one:
-                        return instances[0].name
-                    return [i.name for i in instances]
+
+        ptobject = models.PtObject.get_from_uri(object_id)
+        if ptobject:
+            instances = ptobject.instances()
+            if len(instances) > 0:
+                if only_one:
+                    return sort_instances(instances)[0].name
+                return [i.name for i in instances]
         raise RegionNotFound(object_id=object_id)
 
     def key_of_coord(self, lon, lat, only_one=True):
@@ -177,28 +196,29 @@ class InstanceManager(object):
         """
         p = geometry.Point(lon, lat)
         valid_instances = []
+        # a valid instance is an instance containing the coord and accessible by the user
         for key, instance in self.instances.iteritems():
-            if instance.geom and instance.geom.contains(p):
+            if instance.geom and instance.geom.contains(p) \
+                    and authentification.has_access(instance, abort=False):  #TODO, pb how to check the api ?
                 valid_instances.append(key)
-        #HOTFIX
 
         if valid_instances:
             if only_one:
-                #If we have only one instance we return it
-                return valid_instances[0]
+                #If we have only one instance we return the 'best one'
+                return sort_instances(valid_instances)[0]
             else:
                 return valid_instances
 
         raise RegionNotFound(lon=lon, lat=lat)
 
-    def is_region_exists(self, region_str):
+    def region_exists(self, region_str):
         if (region_str in self.instances.keys()):
             return True
         else:
             raise RegionNotFound(region=region_str)
 
     def get_region(self, region_str=None, lon=None, lat=None, object_id=None):
-        if region_str and self.is_region_exists(region_str):
+        if region_str and self.region_exists(region_str):
             return region_str
         elif lon and lat:
             return self.key_of_coord(lon, lat)
