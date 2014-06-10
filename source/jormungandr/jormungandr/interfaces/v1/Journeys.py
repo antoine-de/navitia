@@ -451,13 +451,26 @@ def get_region(args):
 
     """
     _region = None
+    possible_regions = set()
+    from_regions = set()
+    to_regions = set()
     if args['origin']:
-        region = i_manager.key_of_id(args['origin'])
+        from_regions = set(i_manager.key_of_id(args['origin'], only_one=False))
 
     if args['destination']:
-        region = i_manager.key_of_id(args['destination'])
-    # else:
-    #    raise RegionNotFound("")
+        to_regions = set(i_manager.key_of_id(args['destination'], only_one=False))
+
+    if not from_regions:
+        #we didn't get any origin, the region is in the destination's list
+        possible_regions = to_regions
+    elif not to_regions:
+        #we didn't get any origin, the region is in the destination's list
+        possible_regions = from_regions
+    else:
+        #we need the intersection set
+        possible_regions = from_regions.intersection(to_regions)
+
+    sorted_regions = []
     if not _region:
         raise RegionNotFound("cannot find a region with {o} and {d} in the same time")
 

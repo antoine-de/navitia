@@ -142,12 +142,11 @@ class InstanceManager(object):
         if not self.thread_event.is_set():
             self.thread_event.set()
 
-    def key_of_id(self, object_id):
+    def key_of_id(self, object_id, only_one=True):
         """ Retrieves the key of the region of a given id
             if it's a coord calls key_of_coord
             Return the region key, or None if it doesn't exists
         """
-# Il s'agit d'une coordonnée
         if object_id.count(";") == 1 or object_id[:6] == "coord:":
             if object_id.count(";") == 1:
                 lon, lat = object_id.split(";")
@@ -158,20 +157,23 @@ class InstanceManager(object):
                 flat = float(lat)
             except:
                 raise RegionNotFound(object_id=object_id)
-            return self.key_of_coord(flon, flat)
+            return self.key_of_coord(flon, flat, only_one)
         else:
             ptobject = models.PtObject.get_from_uri(object_id)
             if ptobject:
                 instances = ptobject.instances()
                 if len(instances) > 0:
-                    return instances[0].name
+                    if only_one:
+                        return instances[0].name
+                    return [i.name for i in instances]
         raise RegionNotFound(object_id=object_id)
 
-    def key_of_coord(self, lon, lat):
-        """ Étant donné une coordonnée, retourne à quelle clef NAViTiA cela
-        correspond
+    def key_of_coord(self, lon, lat, only_one=True):
+        """ For a given coordinate, return the corresponding Navitia key
 
-        Retourne None si on a rien trouvé
+        Raise RegionNotFound if nothing found
+
+        if only_one param is true return only one key, else return the list of possible keys
         """
         p = geometry.Point(lon, lat)
         valid_instances = []
@@ -179,17 +181,13 @@ class InstanceManager(object):
             if instance.geom and instance.geom.contains(p):
                 valid_instances.append(key)
         #HOTFIX
-        #If we have only one instance we return it
-        if len(valid_instances) == 1:
-            return valid_instances[0]
-        elif len(valid_instances) > 1:
-            # We return the first free instance, if there is none we return
-            # the first one
-            for name in valid_instances:
-                instance = models.Instance.get_by_name(name)
-                if instance.is_free:
-                    return name
-            return valid_instances[0]
+
+        if valid_instances:
+            if only_one:
+                #If we have only one instance we return it
+                return valid_instances[0]
+            else:
+                return valid_instances
 
         raise RegionNotFound(lon=lon, lat=lat)
 
