@@ -42,6 +42,7 @@ import kombu
 from navitiacommon import models
 import shutil
 from tyr.helper import get_instance_logger
+from tyr.lock import Lock, retry_wrapper
 
 
 def move_to_backupdirectory(filename, working_directory):
@@ -66,206 +67,182 @@ def make_connection_string(instance_config):
     connection_string += ' password=' + instance_config.pg_password
     return connection_string
 
-#TODO bind task
+
 @celery.task()
 def fusio2ed(instance_config, filename, job_id):
     """ Unzip fusio file and launch fusio2ed """
 
+    print "calling fusio2Ed"
     job = models.Job.query.get(job_id)
     instance = job.instance
-    lock = redis.lock('tyr.lock|' + instance.name)
-    if not lock.acquire(blocking=False):
-        fusio2ed.retry(countdown=300, max_retries=10)
+    with Lock(instance.name, lambda: fusio2ed.retry(countdown=30, max_retries=100)):
 
-    logger = get_instance_logger(instance)
-    try:
-        working_directory = os.path.dirname(filename)
+        logger = get_instance_logger(instance)
+        try:
+            working_directory = os.path.dirname(filename)
 
-        zip_file = zipfile.ZipFile(filename)
-        zip_file.extractall(path=working_directory)
+            zip_file = zipfile.ZipFile(filename)
+            zip_file.extractall(path=working_directory)
 
-        params = ["-i", working_directory]
-        if instance_config.aliases_file:
-            params.append("-a")
-            params.append(instance_config.aliases_file)
+            params = ["-i", working_directory]
+            if instance_config.aliases_file:
+                params.append("-a")
+                params.append(instance_config.aliases_file)
 
-        if instance_config.synonyms_file:
-            params.append("-s")
-            params.append(instance_config.synonyms_file)
+            if instance_config.synonyms_file:
+                params.append("-s")
+                params.append(instance_config.synonyms_file)
 
-        connection_string = make_connection_string(instance_config)
-        params.append("--connection-string")
-        params.append(connection_string)
-        res = launch_exec("fusio2ed", params, logger)
-        if res != 0:
-            raise ValueError('fusio2ed failed')
-    except:
-        logger.exception('')
-        job.state = 'failed'
-        models.db.session.commit()
-        raise
-    finally:
-        lock.release()
+            connection_string = make_connection_string(instance_config)
+            params.append("--connection-string")
+            params.append(connection_string)
+            res = launch_exec("fusio2ed", params, logger)
+            if res != 0:
+                raise ValueError('fusio2ed failed')
+        except:
+            logger.exception('')
+            job.state = 'failed'
+            models.db.session.commit()
+            raise
 
 
-@celery.task()
-def gtfs2ed(instance_config, gtfs_filename,  job_id):
+@celery.task(bind=True)
+def gtfs2ed(self, instance_config, gtfs_filename,  job_id):
     """ Unzip gtfs file launch gtfs2ed """
 
     job = models.Job.query.get(job_id)
     instance = job.instance
-    lock = redis.lock('tyr.lock|' + instance.name)
-    if not lock.acquire(blocking=False):
-        gtfs2ed.retry(countdown=300, max_retries=10)
+    with Lock(instance.name, retry_wrapper(self)):
 
-    logger = get_instance_logger(instance)
-    try:
-        working_directory = os.path.dirname(gtfs_filename)
+        logger = get_instance_logger(instance)
+        try:
+            working_directory = os.path.dirname(gtfs_filename)
 
-        zip_file = zipfile.ZipFile(gtfs_filename)
-        zip_file.extractall(path=working_directory)
+            zip_file = zipfile.ZipFile(gtfs_filename)
+            zip_file.extractall(path=working_directory)
 
-        params = ["-i", working_directory]
-        if instance_config.aliases_file:
-            params.append("-a")
-            params.append(instance_config.aliases_file)
+            params = ["-i", working_directory]
+            if instance_config.aliases_file:
+                params.append("-a")
+                params.append(instance_config.aliases_file)
 
-        if instance_config.synonyms_file:
-            params.append("-s")
-            params.append(instance_config.synonyms_file)
+            if instance_config.synonyms_file:
+                params.append("-s")
+                params.append(instance_config.synonyms_file)
 
-        connection_string = make_connection_string(instance_config)
-        params.append("--connection-string")
-        params.append(connection_string)
-        res = launch_exec("gtfs2ed", params, logger)
-        if res != 0:
-            raise ValueError('gtfs2ed failed')
-    except:
-        logger.exception('')
-        job.state = 'failed'
-        models.db.session.commit()
-        raise
-    finally:
-        lock.release()
+            connection_string = make_connection_string(instance_config)
+            params.append("--connection-string")
+            params.append(connection_string)
+            res = launch_exec("gtfs2ed", params, logger)
+            if res != 0:
+                raise ValueError('gtfs2ed failed')
+        except:
+            logger.exception('')
+            job.state = 'failed'
+            models.db.session.commit()
+            raise
 
 
-@celery.task()
-def osm2ed(instance_config, osm_filename, job_id):
+@celery.task(bin=True)
+def osm2ed(self, instance_config, osm_filename, job_id):
     """ launch osm2ed """
 
     job = models.Job.query.get(job_id)
     instance = job.instance
-    lock = redis.lock('tyr.lock|' + instance.name)
-    if not lock.acquire(blocking=False):
-        osm2ed.retry(countdown=300, max_retries=10)
+    with Lock(instance.name, retry_wrapper(self)):
 
-    logger = get_instance_logger(instance)
-    try:
-        connection_string = make_connection_string(instance_config)
-        res = launch_exec('osm2ed',
-                ["-i", osm_filename, "--connection-string", connection_string],
-                logger)
-        if res != 0:
-            #@TODO: exception
-            raise ValueError('osm2ed failed')
-    except:
-        logger.exception('')
-        job.state = 'failed'
-        models.db.session.commit()
-        raise
-    finally:
-        lock.release()
+        logger = get_instance_logger(instance)
+        try:
+            connection_string = make_connection_string(instance_config)
+            res = launch_exec('osm2ed',
+                    ["-i", osm_filename, "--connection-string", connection_string],
+                    logger)
+            if res != 0:
+                #@TODO: exception
+                raise ValueError('osm2ed failed')
+        except:
+            logger.exception('')
+            job.state = 'failed'
+            models.db.session.commit()
+            raise
 
-@celery.task()
-def geopal2ed(instance_config, filename, job_id):
+@celery.task(bind=True)
+def geopal2ed(self, instance_config, filename, job_id):
     """ launch geopal2ed """
 
     job = models.Job.query.get(job_id)
     instance = job.instance
-    lock = redis.lock('tyr.lock|' + instance.name)
-    if not lock.acquire(blocking=False):
-        geopal2ed.retry(countdown=300, max_retries=10)
+    with Lock(instance.name, retry_wrapper(self)):
 
-    logger = get_instance_logger(instance)
-    try:
-        working_directory = os.path.dirname(filename)
+        logger = get_instance_logger(instance)
+        try:
+            working_directory = os.path.dirname(filename)
 
-        zip_file = zipfile.ZipFile(filename)
-        zip_file.extractall(path=working_directory)
+            zip_file = zipfile.ZipFile(filename)
+            zip_file.extractall(path=working_directory)
 
-        connection_string = make_connection_string(instance_config)
-        res = launch_exec('geopal2ed',
-                ["-i", working_directory, "--connection-string", connection_string],
-                logger)
-        if res != 0:
-            #@TODO: exception
-            raise ValueError('geopal2ed failed')
-    except:
-        logger.exception('')
-        job.state = 'failed'
-        models.db.session.commit()
-        raise
-    finally:
-        lock.release()
+            connection_string = make_connection_string(instance_config)
+            res = launch_exec('geopal2ed',
+                    ["-i", working_directory, "--connection-string", connection_string],
+                    logger)
+            if res != 0:
+                #@TODO: exception
+                raise ValueError('geopal2ed failed')
+        except:
+            logger.exception('')
+            job.state = 'failed'
+            models.db.session.commit()
+            raise
 
-@celery.task()
-def poi2ed(instance_config, filename, job_id):
+@celery.task(bind=True)
+def poi2ed(self, instance_config, filename, job_id):
     """ launch poi2ed """
 
     job = models.Job.query.get(job_id)
     instance = job.instance
-    lock = redis.lock('tyr.lock|' + instance.name)
-    if not lock.acquire(blocking=False):
-        poi2ed.retry(countdown=300, max_retries=10)
+    with Lock(instance.name, retry_wrapper(self)):
 
-    logger = get_instance_logger(instance)
-    try:
-        working_directory = os.path.dirname(filename)
+        logger = get_instance_logger(instance)
+        try:
+            working_directory = os.path.dirname(filename)
 
-        zip_file = zipfile.ZipFile(filename)
-        zip_file.extractall(path=working_directory)
+            zip_file = zipfile.ZipFile(filename)
+            zip_file.extractall(path=working_directory)
 
-        connection_string = make_connection_string(instance_config)
-        res = launch_exec('poi2ed',
-                ["-i", working_directory, "--connection-string", connection_string],
-                logger)
-        if res != 0:
-            #@TODO: exception
-            raise ValueError('poi2ed failed')
-    except:
-        logger.exception('')
-        job.state = 'failed'
-        models.db.session.commit()
-        raise
-    finally:
-        lock.release()
+            connection_string = make_connection_string(instance_config)
+            res = launch_exec('poi2ed',
+                    ["-i", working_directory, "--connection-string", connection_string],
+                    logger)
+            if res != 0:
+                #@TODO: exception
+                raise ValueError('poi2ed failed')
+        except:
+            logger.exception('')
+            job.state = 'failed'
+            models.db.session.commit()
+            raise
 
-@celery.task()
-def synonym2ed(instance_config, filename, job_id):
+@celery.task(bind=True)
+def synonym2ed(self, instance_config, filename, job_id):
     """ launch synonym2ed """
 
     job = models.Job.query.get(job_id)
     instance = job.instance
-    lock = redis.lock('tyr.lock|' + instance.name)
-    if not lock.acquire(blocking=False):
-        synonym2ed.retry(countdown=300, max_retries=10)
-
-    logger = get_instance_logger(instance)
-    try:
-        connection_string = make_connection_string(instance_config)
-        res = launch_exec('synonym2ed',
-                ["-i", filename, "--connection-string", connection_string],
-                logger)
-        if res != 0:
-            #@TODO: exception
-            raise ValueError('synonym2ed failed')
-    except:
-        logger.exception('')
-        job.state = 'failed'
-        models.db.session.commit()
-        raise
-    finally:
-        lock.release()
+    with Lock(instance.name, retry_wrapper(self)):
+        logger = get_instance_logger(instance)
+        try:
+            connection_string = make_connection_string(instance_config)
+            res = launch_exec('synonym2ed',
+                    ["-i", filename, "--connection-string", connection_string],
+                    logger)
+            if res != 0:
+                #@TODO: exception
+                raise ValueError('synonym2ed failed')
+        except:
+            logger.exception('')
+            job.state = 'failed'
+            models.db.session.commit()
+            raise
 
 @celery.task()
 def reload_data(instance_config, job_id):
@@ -294,91 +271,78 @@ def reload_data(instance_config, job_id):
         raise
 
 
-@celery.task()
-def ed2nav(instance_config, job_id):
+@celery.task(bind=True)
+def ed2nav(self, instance_config, job_id):
     """ Launch ed2nav"""
     job = models.Job.query.get(job_id)
     instance = job.instance
-    lock = redis.lock('tyr.lock|' + instance.name)
-    if not lock.acquire(blocking=False):
-        ed2nav.retry(countdown=300, max_retries=10)
-
-    logger = get_instance_logger(instance)
-    try:
-        filename = instance_config.tmp_file
-        connection_string = make_connection_string(instance_config)
-        argv = ["-o", filename, "--connection-string", connection_string]
-        if 'CITIES_DATABASE_URI' in current_app.config:
-            argv.extend(["--cities-connection-string", current_app.config['CITIES_DATABASE_URI']])
-        res = launch_exec('ed2nav', argv, logger)
-        if res != 0:
-            raise ValueError('ed2nav failed')
-    except:
-        logger.exception('')
-        job.state = 'failed'
-        models.db.session.commit()
-        raise
-    finally:
-        lock.release()
+    with Lock(instance.name, retry_wrapper(self)):
+        logger = get_instance_logger(instance)
+        try:
+            filename = instance_config.tmp_file
+            connection_string = make_connection_string(instance_config)
+            argv = ["-o", filename, "--connection-string", connection_string]
+            if 'CITIES_DATABASE_URI' in current_app.config:
+                argv.extend(["--cities-connection-string", current_app.config['CITIES_DATABASE_URI']])
+            res = launch_exec('ed2nav', argv, logger)
+            if res != 0:
+                raise ValueError('ed2nav failed')
+        except:
+            logger.exception('')
+            job.state = 'failed'
+            models.db.session.commit()
+            raise
 
 
-@celery.task()
-def nav2rt(instance_config, job_id):
+@celery.task(bind=True)
+def nav2rt(self, instance_config, job_id):
     """ Launch nav2rt"""
     job = models.Job.query.get(job_id)
     instance = job.instance
-    lock = redis.lock('tyr.lock|' + instance.name)
-    if not lock.acquire(blocking=False):
-        nav2rt.retry(countdown=300, max_retries=10)
+    with Lock(instance.name, retry_wrapper(self)):
 
-    logger = get_instance_logger(instance)
-    try:
-        source_filename = instance_config.tmp_file
-        target_filename = instance_config.target_file
-        connection_string = make_connection_string(instance_config)
-        res = launch_exec('nav2rt',
-                    ["-i", source_filename, "-o", target_filename,
-                        "--connection-string", connection_string],
-                    logger)
-        if res != 0:
-            raise ValueError('nav2rt failed')
-    except:
-        logger.exception('')
-        job.state = 'failed'
-        models.db.session.commit()
-        raise
-    finally:
-        lock.release()
+        logger = get_instance_logger(instance)
+        try:
+            source_filename = instance_config.tmp_file
+            target_filename = instance_config.target_file
+            connection_string = make_connection_string(instance_config)
+            res = launch_exec('nav2rt',
+                        ["-i", source_filename, "-o", target_filename,
+                            "--connection-string", connection_string],
+                        logger)
+            if res != 0:
+                raise ValueError('nav2rt failed')
+        except:
+            logger.exception('')
+            job.state = 'failed'
+            models.db.session.commit()
+            raise
 
 
-@celery.task()
-def fare2ed(instance_config, filename, job_id):
+@celery.task(bind=True)
+def fare2ed(self, instance_config, filename, job_id):
     """ launch fare2ed """
 
+    print "calling fare2Ed"
     job = models.Job.query.get(job_id)
     instance = job.instance
-    lock = redis.lock('tyr.lock|' + instance.name)
-    if not lock.acquire(blocking=False):
-        fare2ed.retry(countdown=300, max_retries=10)
+    with Lock(instance.name, lambda: self.retry(countdown=3, max_retries=100)):
+        logger = get_instance_logger(instance)
+        try:
+            working_directory = os.path.dirname(filename)
 
-    logger = get_instance_logger(instance)
-    try:
-        working_directory = os.path.dirname(filename)
+            zip_file = zipfile.ZipFile(filename)
+            zip_file.extractall(path=working_directory)
 
-        zip_file = zipfile.ZipFile(filename)
-        zip_file.extractall(path=working_directory)
-
-        res = launch_exec("fare2ed", ['-f', working_directory,
-                                      '--connection-string',
-                                      make_connection_string(instance_config)],
-                          logger)
-        if res != 0:
-            #@TODO: exception
-            raise ValueError('fare2ed failed')
-    except:
-        logger.exception('')
-        job.state = 'failed'
-        models.db.session.commit()
-        raise
-    finally:
-        lock.release()
+            res = launch_exec("fare2ed", ['-f', working_directory,
+                                          '--connection-string',
+                                          make_connection_string(instance_config)],
+                              logger)
+            if res != 0:
+                #@TODO: exception
+                raise ValueError('fare2ed failed')
+        except:
+            logger.exception('')
+            job.state = 'failed'
+            models.db.session.commit()
+            raise
