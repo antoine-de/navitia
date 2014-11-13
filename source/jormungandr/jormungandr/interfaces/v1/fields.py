@@ -367,7 +367,7 @@ disruption = {
     "application_periods": NonNullList(NonNullNested(period)),
     "status": fields.String(),
     "updated_at": DateTime(),
-    "tags": NonNullList(NonNullNested(fields.String())),
+    "tags": NonNullList(fields.String()),
     "cause": fields.String(),
     "messages": NonNullList(NonNullNested(disruption_message)),
 }
@@ -591,6 +591,7 @@ instance_status = {
         "end_production_date": fields.String(),
         "is_connected_to_rabbitmq": fields.Boolean(),
         "last_load_at": fields.String(),
+        "last_rt_data_loaded": fields.String(),
         "last_load_status": fields.Boolean(),
         "kraken_version": fields.String(attribute="navitia_version"),
         "nb_threads": fields.Integer(),
