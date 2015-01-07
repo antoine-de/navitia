@@ -29,7 +29,7 @@
 # https://groups.google.com/d/forum/navitia
 # www.navitia.io
 
-from flask.ext.restful import marshal_with, reqparse
+from flask.ext.restful import marshal_with, reqparse, abort
 from jormungandr import i_manager, timezone
 from fields import PbField, error, network, line,\
     NonNullList, NonNullNested, pagination, stop_area
@@ -76,7 +76,7 @@ class Disruptions(ResourceUri):
         parser_get.add_argument("period", type=int,
                                 description="Period in days from datetime. DEPRECATED use duration parameter")
         parser_get.add_argument("duration", type=duration, default=timedelta(days=365),
-                                description="Duration from the period we want to display the disruption on")
+                                description="Duration of the period we want to display the disruption on")
         parser_get.add_argument("datetime", type=date_time_format, default=datetime.now(), #TODO!! we have to take the local instance time
                                 description="The datetime from which you want the disruption "
                                             "(filter on the disruption application periods)")
@@ -112,6 +112,12 @@ class Disruptions(ResourceUri):
             period_end = args['datetime'] + timedelta(days=args.get('period'))
 
         args['period_end'] = period_end
+
+        if args['period_end'] < args['datetime']:
+            if args.get('period'):
+                abort(400, message="The 'period' parameter cannot be negative")
+            else:
+                abort(400, message="The 'duration' parameter cannot be negative")
 
         response = i_manager.dispatch(args, "disruptions",
                                       instance_name=self.region)

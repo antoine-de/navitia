@@ -190,7 +190,7 @@ class TestDisruptions(AbstractTestFixture):
         we ask for the disruption on the 3 next days
         => we get 2 impacts (too_bad and too_bad_again)
 
-        we ask for the disruption on the 3 next yers
+        we ask for the disruption on the 3 next years
         => we get 3 impacts (we get later_impact too)
 
         """
@@ -207,6 +207,22 @@ class TestDisruptions(AbstractTestFixture):
         assert len(impacts) == 3
         assert 'later_impact' in impacts
 
+    def test_disruption_negative_period_filter(self):
+        """
+        same filter as the test_disruption_period_filter test, but with a negative duration
+
+        This do not work, we get an error
+        """
+        r, code = self.query_no_assert('v1/coverage/main_routing_test/disruptions?'
+                                       'duration=P-3D' + default_date_filter)
+
+        assert code == 400
+
+        #same with the old deprecated param (period)
+        _, code = self.query_no_assert('v1/coverage/main_routing_test/disruptions?'
+                                       'period=-365' + default_date_filter)
+
+        assert code == 400
     def test_disruption_publication_date_filter(self):
         """
         test the publication date filter
