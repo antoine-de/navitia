@@ -28,10 +28,18 @@
 # IRC #navitia on freenode
 # https://groups.google.com/d/forum/navitia
 # www.navitia.io
+import logging
+import datetime
+from functools import wraps
+from copy import deepcopy
 
 from flask.ext.restful import fields, marshal_with, reqparse
+from flask.ext.restful.utils import unpack
 from flask.globals import g
 from flask import request
+from flask.ext.restful.types import natural, boolean
+import flask.ext.restful
+
 from jormungandr import i_manager, utils
 from jormungandr import timezone
 from fields import stop_point, route, pagination, PbField, stop_date_time, \
@@ -39,16 +47,42 @@ from fields import stop_point, route, pagination, PbField, stop_date_time, \
     display_informations_route, additional_informations_vj, UrisToLinks, error, \
     enum_type, SplitDateTime, MultiLineString
 from ResourceUri import ResourceUri, complete_links
-import datetime
 from jormungandr.interfaces.argument import ArgumentDoc
-from jormungandr.interfaces.parsers import option_value, date_time_format
+from jormungandr.interfaces.parsers import date_time_format
 from errors import ManageError
-from flask.ext.restful.types import natural, boolean
 from jormungandr.interfaces.v1.fields import DisruptionsField
 from jormungandr.utils import ResourceUtc
 from make_links import create_external_link
-from functools import wraps
-from copy import deepcopy
+
+import navitia_marshal
+
+class new_marshal_with(object):
+    def __init__(self, fields, new_marshal_field):
+        self.fields = fields
+        self.new_marshal_field = new_marshal_field
+        self.display_null = False
+
+    def __call__(self, f):
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            resp = f(*args, **kwargs)
+            if not g.use_new_marshal:
+                logging.warn('using old school custom_marshal')
+                if isinstance(resp, tuple):
+                    data, code, headers = unpack(resp)
+                    return flask.ext.restful.marshal(data, self.fields, self.display_null), code, headers
+                else:
+                    return flask.ext.restful.marshal(resp, self.fields, self.display_null)
+            
+            logging.warn('using new custom_marshal !!')
+            marshal_info = navitia_marshal.marshal_info(g.timezone)
+            if isinstance(resp, tuple):
+                data, code, headers = unpack(resp)
+                return navitia_marshal.simple_marshal(data, self.new_marshal_field, marshal_info), code, headers
+            else:
+                return navitia_marshal.simple_marshal(resp, self.new_marshal_field, marshal_info)
+        return wrapper
+
 
 
 class RouteSchedulesLinkField(fields.Raw):
@@ -99,6 +133,8 @@ class Schedules(ResourceUri, ResourceUtc):
         parser_get.add_argument("_current_datetime", type=date_time_format, default=datetime.datetime.utcnow(),
                                 description="The datetime we want to publish the disruptions from."
                                             " Default is the current date and it is mainly used for debug.")
+        parser_get.add_argument("_new_marshal", type=boolean, default=False,
+                                description="debug to use the new custom_marshal")
 
         self.method_decorators.append(complete_links(self))
 
@@ -106,6 +142,8 @@ class Schedules(ResourceUri, ResourceUtc):
         args = self.parsers["get"].parse_args()
         args["nb_stoptimes"] = args["count"]
         args["interface_version"] = 1
+        
+        g.use_new_marshal = args['_new_marshal']  #DEBUG
 
         if uri is None:
             first_filter = args["filter"].lower().split("and")[0].strip()
@@ -191,7 +229,7 @@ class RouteSchedules(Schedules):
     def __init__(self):
         super(RouteSchedules, self).__init__("route_schedules")
 
-    @marshal_with(route_schedules)
+    @new_marshal_with(route_schedules, navitia_marshal.route_schedules)
     @ManageError()
     def get(self, uri=None, region=None, lon=None, lat=None):
         return super(RouteSchedules, self).get(uri=uri, region=region, lon=lon,

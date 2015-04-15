@@ -1,6 +1,6 @@
-#!/usr/bin/env python
+#coding=utf-8
 
-# Copyright (c) 2001-2014, Canal TP and/or its affiliates. All rights reserved.
+#  Copyright (c) 2001-2015, Canal TP and/or its affiliates. All rights reserved.
 #
 # This file is part of Navitia,
 #     the software to build cool stuff with public transport.
@@ -29,24 +29,3 @@
 # https://groups.google.com/d/forum/navitia
 # www.navitia.io
 
-from distutils.core import setup
-from setuptools import find_packages
-from distutils.extension import Extension
-from Cython.Build import cythonize
-
-extensions = [
-    Extension("navitia_fields", ["jormungandr/custom_marshal/navitia_fields.pyx"],
-              include_dirs=['jormungandr/custom_marshal/', '.']),
-    Extension("navitia_marshal", ["jormungandr/custom_marshal/navitia_marshal.pyx"],
-              include_dirs=['jormungandr/custom_marshal/', '.']),
-]
-
-setup(name='jormungandr',
-      description='webservice d\'exposition en http de kraken',
-      author='CanalTP',
-      author_email='vincent.lara@canaltp.fr',
-      url='www.navitia.io',
-      packages=find_packages(),
-      data_files=[('/usr/share/jormungandr', ['requirements.txt'])],
-      ext_modules=cythonize(extensions)
-)
