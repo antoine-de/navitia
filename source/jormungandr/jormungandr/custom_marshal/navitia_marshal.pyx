@@ -30,18 +30,25 @@
 # www.navitia.io
 from collections import OrderedDict
 from functools import wraps
+import logging
 from flask.ext.restful.utils import unpack
 import datetime
 import pytz
 
-class marshal_info(object):
+#import to be split in navitia_fields
+# from jormungandr import utils
+# from jormungandr.interfaces.v1.make_links import create_internal_link
+from navitiacommon import type_pb2
+
+cdef class MarshalInfo(object):
+    cdef public timezone
     def __init__(self, timezone):
         self.timezone = timezone
 
 class custom_marshal_with:
     def __init__(self, fields, timezone):
         self.fields = fields
-        self.marshal_info = marshal_info(timezone)
+        self.misc_info = MarshalInfo(timezone)
 
     def __call__(self, f):
 
@@ -50,118 +57,152 @@ class custom_marshal_with:
             resp = f(*args, **kwargs)
             if isinstance(resp, tuple):
                 data, code, headers = unpack(resp)
-                return simple_marshal(data, self.fields, self.marshal_info), code, headers
+                return simple_marshal(data, self.fields, self.misc_info), code, headers
             else:
-                return simple_marshal(resp, self.fields, self.marshal_info)
+                return simple_marshal(resp, self.fields, self.misc_info)
         return wrapper
 
-def simple_marshal(data, fields, marshal_info, display_null=False):
-    items = OrderedDict()
+cpdef simple_marshal(data, fields, misc_info, display_null=False):
+    cdef items = OrderedDict()
+    cdef basestring k
+    cdef Raw v
+
     for k, v in fields.items():
-        tmp = v.output(k, data, marshal_info)
+
+        # logging.error(" ++ key = {}, value = {}".format(k, v))
+        tmp = v.output(k, data, misc_info)
+        # logging.error("res = {}".format(tmp))
         if tmp is not None or display_null:
             items[k] = tmp
     return items
 
+cdef class Getter:
+    cdef get(self, obj, basestring attribute):
+        raise NotImplementedError
 
-def default_getter(obj, attribute):
-    if not obj.HasField(attribute):
+cdef class default_getter(Getter):
+    cdef get(self, obj, basestring attribute):
+        # logging.warn('getter for {} and {}'.format(obj, attribute))
+        if not obj.HasField(attribute):
+            return None
+        attr = getattr(obj, attribute)
+
+        # if type(attr) in [bytes, str, unicode, basestring]:
+        #     logging.warn("obob???? {}".format(type(attr)))
+        #     attr = <bytes>attr
+        # logging.warn('getter returned value: {}'.format(attr))
+        if attr is not None and attr != '':
+            return attr
         return None
-    return getattr(obj, attribute)
 
 
-def list_getter(obj, attribute):
-    return getattr(obj, attribute)
+cdef class list_getter(Getter):
+    cdef get(self, obj, basestring attribute):
+        return getattr(obj, attribute)
 
 
-class simple_atttribute_getter(object):
-    def __init__(self, attribute):
+cdef class simple_atttribute_getter(Getter):
+    cdef basestring attribute
+    def __init__(self, basestring attribute):
         self.attribute = attribute
 
-    def __call__(self, obj, attribute):
-        return default_getter(obj, self.attribute)
+    cdef get(self, obj, basestring attribute):
+        return default_getter().get(obj, self.attribute)
 
 
-class label_getter(object):
-    def __call__(self, obj, key):
+cdef class label_getter(Getter):
+    cdef get(self, obj, basestring attribute):
         return obj.code if obj.code != '' else obj.name
 
 
-class Raw(object):
-    def __init__(self, getter=default_getter):
+cdef class Raw(object):
+    cdef readonly Getter getter
+    def __init__(self, Getter getter=default_getter()):
         self.getter = getter
+        if self.getter is None:
+            raise Exception('mierda')
 
-    def format(self, value, marshal_info):
+    cdef format(self, value, misc_info):
         return value
 
-    def output(self, key, obj, marshal_info):
-        value = self.getter(obj, key)
+    cdef output(self, key, obj, MarshalInfo misc_info):
+
+        # logging.error("---------------")
+        # logging.error("getter = {}, obj = {}".format(self.getter, self.__class__))
+        value = self.getter.get(obj, key)
+        # logging.error("=============================================")
+        # logging.error("value = {}".format(value))
+        # logging.error("=============================================")
         if not value:
             return None
-        return self.format(value, marshal_info)
+        return self.format(value, misc_info)
 
 
-class Integer(Raw):
-    def __init__(self, **kwargs):
-        super(Integer, self).__init__(**kwargs)
-
-    def format(self, value, marshal_info):
+cdef class Integer(Raw):
+    cdef format(self, value, misc_info):
         return int(value)
 
 
-class Float(Raw):
-    def format(self, value, marshal_info):
+cdef class Float(Raw):
+    cdef format(self, value, misc_info):
         return repr(float(value))
 
 
-class Nested(Raw):
+cdef class Nested(Raw):
+    cdef nested_field
+    cdef bint display_null
+
     def __init__(self, nested_field, display_null=False, **kwargs):
         self.nested_field = nested_field
         self.display_null = display_null
         super(Nested, self).__init__(**kwargs)
 
-    def output(self, key, obj, marshal_info):
-        value = self.getter(obj, key)
+    cdef output(self, key, obj, MarshalInfo misc_info):
+        value = self.getter.get(obj, key)
         if not value:
             return None
-        return simple_marshal(value, self.nested_field, marshal_info, self.display_null)
+        return simple_marshal(value, self.nested_field, misc_info, self.display_null)
 
 
-class List(Raw):
-    def __init__(self, nested_field, getter=list_getter, display_empty=False, display_null=False, **kwargs):
+cdef class List(Raw):
+    cdef bint display_empty
+    cdef bint display_null
+    cdef nested_field
+
+    def __init__(self, nested_field, Getter getter=list_getter(), display_empty=False, display_null=False, **kwargs):
         super(List, self).__init__(getter, **kwargs)
         self.display_empty = display_empty
         self.display_null = display_null
         self.nested_field = nested_field
 
-    def output(self, key, obj, marshal_info):
-        values = self.getter(obj, key)
+    cdef output(self, key, obj, MarshalInfo misc_info):
+        values = self.getter.get(obj, key)
 
         if not values and not self.display_empty:
             return None
 
-        return [simple_marshal(value, self.nested_field, marshal_info, self.display_null) for value in values]
+        return [simple_marshal(value, self.nested_field, misc_info, self.display_null) for value in values]
 
 
-class enum_type(Raw):
-    def output(self, key, obj, marshal_info):
-        value = self.getter(obj, key)
+cdef class enum_type(Raw):
+    cdef output(self, key, obj, MarshalInfo misc_info):
+        value = self.getter.get(obj, key)
 
         enum = obj.DESCRIPTOR.fields_by_name[key].enum_type.values_by_number
         return str.lower(enum[value].name)
 
 
-class DateTime(Raw):
+cdef class DateTime(Raw):
     """
     custom date format from timestamp
     """
-    def format(self, value, marshal_info):
+    cdef format(self, value, misc_info):
         #TODO, try to find faster way to do that
         dt = datetime.datetime.utcfromtimestamp(value)
 
-        if marshal_info.timezone:
+        if misc_info.timezone:
             dt = pytz.utc.localize(dt)
-            dt = dt.astimezone(marshal_info.timezone)
+            dt = dt.astimezone(misc_info.timezone)
             return dt.strftime("%Y%m%dT%H%M%S")
         return None  # for the moment I prefer not to display anything instead of something wrong
 
@@ -169,15 +210,20 @@ class DateTime(Raw):
 __date_time_null_value__ = 2**64 - 1
 
 
-class SplitDateTime(DateTime):
+cdef class SplitDateTime(DateTime):
+    cdef basestring date
+    cdef basestring time
+
     def __init__(self, date, time, *args, **kwargs):
-        super(DateTime, self).__init__(*args, **kwargs)
+        super(SplitDateTime, self).__init__(*args, **kwargs)
+        if self.getter is None:
+            raise Exception("miiiiiiiiiiiiiiiiiiierda")
         self.date = date
         self.time = time
 
-    def output(self, key, obj, marshal_info):
-        date = self.getter(obj, self.date) if self.date else None
-        time = self.getter(obj, self.time)
+    cdef output(self, key, obj, MarshalInfo misc_info):
+        date = self.getter.get(obj, self.date) if self.date else None
+        time = self.getter.get(obj, self.time)
 
         if time == __date_time_null_value__:
             return ""
@@ -186,10 +232,9 @@ class SplitDateTime(DateTime):
             return self.format_time(time)
 
         date_time = date + time
-        return self.format(date_time, marshal_info)
+        return self.format(date_time, misc_info)
 
-    @staticmethod
-    def format_time(time):
+    cdef format_time(self, time):
         t = datetime.datetime.utcfromtimestamp(time)
         return t.strftime("%H%M%S")
 
@@ -198,46 +243,43 @@ class SplitDateTime(DateTime):
 =============================================================
 split in different files after
 """
-from copy import deepcopy
-# from jormungandr import utils
-# from jormungandr.interfaces.v1.make_links import create_internal_link
-from navitiacommon import type_pb2
 
-class DisruptionsField(Raw):
+cdef class DisruptionsField(Raw):
     """
     Dump the real disruptions (and there will be link to them)
     """
-    def output(self, key, obj, marshal_info):
+    cdef output(self, key, obj, MarshalInfo misc_info):
         all_disruptions = {}
 
-        def get_all_disruptions(_, val):
-            if not hasattr(val, 'disruptions'):
-                return
-            disruptions = val.disruptions
-            if not disruptions or not hasattr(disruptions[0], 'uri'):
-                return
-
-            for d in disruptions:
-                all_disruptions[d.uri] = d
+        # def get_all_disruptions(_, val):
+        #     if not hasattr(val, 'disruptions'):
+        #         return
+        #     disruptions = val.disruptions
+        #     if not disruptions or not hasattr(disruptions[0], 'uri'):
+        #         return
+        #
+        #     for d in disruptions:
+        #         all_disruptions[d.uri] = d
 
         # utils.walk_protobuf(obj, get_all_disruptions)
 
-        return [simple_marshal(d, disruption_marshaller, marshal_info, display_null=False) for d in all_disruptions.values()]
+        return []
+        # return [simple_marshal(d, disruption_marshaller, misc_info, display_null=False) for d in all_disruptions.values()]
 
 
-class DisruptionLinks(Raw):
+cdef class DisruptionLinks(Raw):
     """
     Add link to disruptions on a pt object
     """
-    def output(self, key, obj, marshal_info):
+    cdef output(self, key, obj, MarshalInfo misc_info):
         return []
         # return [create_internal_link(_type="disruption", rel="disruptions", id=d.uri)
         #         for d in obj.disruptions]
 
 
-class stop_time_properties_links(Raw):
+cdef class stop_time_properties_links(Raw):
 
-    def output(self, key, obj, marshal_info):
+    cdef output(self, key, obj, MarshalInfo misc_info):
         properties = obj.properties
         r = []
         for note_ in properties.notes:
@@ -282,7 +324,7 @@ coord = {
 }
 
 generic_type = {
-    "name": Raw(),
+    # "name": Raw(),
     "id": Raw(getter=simple_atttribute_getter(attribute="uri")),
     "coord": Nested(coord, True)
 }
@@ -291,27 +333,43 @@ code = {
     "type": Raw(),
     "value": Raw()
 }
-admin = deepcopy(generic_type)
+admin = {
+    # "name": Raw(),
+    "id": Raw(getter=simple_atttribute_getter(attribute="uri")),
+    "coord": Nested(coord, True)
+}
 admin["level"] = Integer
 admin["zip_code"] = Raw()
-admin["label"] = Raw()
+# admin["label"] = Raw()
 admin["insee"] = Raw()
 
-generic_type_admin = deepcopy(generic_type)
+generic_type_admin = {
+    # "name": Raw(),
+    "id": Raw(getter=simple_atttribute_getter(attribute="uri")),
+    "coord": Nested(coord, True)
+}
 admins = List(admin)
 generic_type_admin["administrative_regions"] = admins
 
-stop_point = deepcopy(generic_type_admin)
+stop_point = {
+    # "name": Raw(),
+    "id": Raw(getter=simple_atttribute_getter(attribute="uri")),
+    "coord": Nested(coord, True)
+}
 # stop_point["links"] = DisruptionLinks()
 stop_point["comment"] = Raw()
 stop_point["codes"] = List(code)
-stop_point["label"] = Raw()
-stop_area = deepcopy(generic_type_admin)
+# stop_point["label"] = Raw()
+stop_area = {
+    # "name": Raw(),
+    "id": Raw(getter=simple_atttribute_getter(attribute="uri")),
+    "coord": Nested(coord, True)
+}
 # stop_area["links"] = DisruptionLinks()
 stop_area["comment"] = Raw()
 stop_area["codes"] = List(code)
 stop_area["timezone"] = Raw()
-stop_area["label"] = Raw()
+# stop_area["label"] = Raw()
 
 pagination = {
     "total_result": Integer(getter=simple_atttribute_getter(attribute="totalResult")),
@@ -321,8 +379,8 @@ pagination = {
 }
 
 
-class additional_informations(Raw):
-    def output(self, key, obj, marshal_info):
+cdef class additional_informations(Raw):
+    cdef output(self, key, obj, MarshalInfo misc_info):
         return [str.lower(type_pb2.Properties.AdditionalInformation.Name(v)) for v
                 in obj.properties.additional_informations]
 
@@ -348,7 +406,7 @@ display_informations_vj = {
     "commercial_mode": Raw(),
     "network": Raw(),
     "direction": Raw(),
-    "label": Raw(label_getter()),
+    "label": Raw(getter=label_getter()),
     "color": Raw(),
     "code": Raw(),
     # "equipments": equipments(attribute="has_equipments"),
@@ -357,9 +415,9 @@ display_informations_vj = {
 }
 
 
-class additional_informations_vj(Raw):
+cdef class additional_informations_vj(Raw):
 
-    def output(self, key, obj, marshal_info):
+    cdef output(self, key, obj, MarshalInfo misc_info):
         addinfo = obj.add_info_vehicle_journey
         result = []
         if addinfo.has_date_time_estimated:
@@ -381,9 +439,9 @@ class additional_informations_vj(Raw):
         return result
 
 
-class UrisToLinks(Raw):
+cdef class UrisToLinks(Raw):
 
-    def output(self, key, obj, marshal_info):
+    cdef output(self, key, obj, MarshalInfo misc_info):
         display_info = obj.pt_display_informations
         uris = display_info.uris
         response = []
@@ -427,8 +485,8 @@ table_field = {
 }
 
 
-class MultiLineString(Raw):
-    def format(self, val, marshal_info):
+cdef class MultiLineString(Raw):
+    cdef format(self, val, misc_info):
         lines = []
         for l in val.lines:
             lines.append([[c.lon, c.lat] for c in l.coordinates])
@@ -440,9 +498,9 @@ class MultiLineString(Raw):
         return response
 
 
-class RouteSchedulesLinkField(Raw):
+cdef class RouteSchedulesLinkField(Raw):
 
-    def output(self, key, obj, marshal_info):
+    cdef output(self, key, obj, MarshalInfo misc_info):
         if obj.HasField('pt_display_informations'):
             return [{"type": 'notes', "id": value.uri, 'value': value.note}
                     for value in obj.pt_display_informations.notes]
@@ -452,7 +510,7 @@ display_informations_route = {
     "network": Raw(),
     "direction": Raw(),
     "commercial_mode": Raw(),
-    "label": Raw(label_getter()),
+    "label": Raw(getter=label_getter()),
     "color": Raw(),
     "code": Raw(),
     "links": DisruptionLinks(),

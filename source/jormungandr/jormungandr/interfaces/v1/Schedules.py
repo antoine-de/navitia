@@ -75,7 +75,7 @@ class new_marshal_with(object):
                     return flask.ext.restful.marshal(resp, self.fields, self.display_null)
             
             logging.warn('using new custom_marshal !!')
-            marshal_info = navitia_marshal.marshal_info(g.timezone)
+            marshal_info = navitia_marshal.MarshalInfo(g.timezone)
             if isinstance(resp, tuple):
                 data, code, headers = unpack(resp)
                 return navitia_marshal.simple_marshal(data, self.new_marshal_field, marshal_info), code, headers
