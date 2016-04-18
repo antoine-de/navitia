@@ -35,6 +35,8 @@ import elasticsearch
 from elasticsearch.connection.http_urllib3 import ConnectionError
 from flask.ext.restful import fields, marshal_with
 from flask_restful import marshal
+from jormungandr.exceptions import TechnicalError
+import logging
 
 
 class Lit(fields.Raw):
@@ -203,4 +205,5 @@ class Elasticsearch(AbstractAutocomplete):
             res = self.es.search(index="munin", size=request['count'], body=query)
             return res['hits']
         except ConnectionError:
+            logging.getLogger(__name__).exception('problem accessing elastic search')
             raise TechnicalError("world wide autocompletion service not available")
