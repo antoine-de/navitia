@@ -1,0 +1,30 @@
+node {
+    docker.image('navitia/debian8_dev').inside {
+        stage('build'){
+                checkout scm
+                sh '''
+                    find build_package/ -name results*.xml -exec rm {} \\;
+                    find build_package/ -name nosetest*.xml -exec rm {} \\;
+                '''
+                sh 'mkdir -p build_package'
+                sh 'cd build_package'
+                //we set a custom instance timeout because jenkins can be very slow
+                sh 'cd build_package && CUSTOM_INSTANCE_TIMEOUT=1500 cmake -DCMAKE_BUILD_TYPE=Release ..'
+                sh '''
+                    rm -rf venv/
+                    virtualenv --system-site-packages venv
+
+                    . venv/bin/activate
+                    sed -i '/ujson\\|numpy/d' source/jormungandr/requirements.txt
+                    pip install --no-cache-dir -r source/jormungandr/requirements.txt
+
+                    if [ -e source/jormungandr/requirements_dev.txt ]
+                    then
+                        pip install --no-cache-dir -r source/jormungandr/requirements_dev.txt
+                    fi
+
+                    pip install -r source/tyr/requirements.txt
+                '''
+        }
+    }
+}
