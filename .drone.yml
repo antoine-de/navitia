@@ -1,0 +1,11 @@
+pipeline:
+  build:
+    image: build_navtia 
+    commands: 
+        - cmake source
+        - make -j4 
+        - pip install -r source/jormungandr/requirements.txt
+        - pip install -r source/jormungandr/requirements_dev.txt
+        - pip install -r source/tyr/requirements.txt
+        - pip install -r source/tyr/requirements_dev.txt
+        - make test 
