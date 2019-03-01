@@ -83,6 +83,8 @@ namespace navitia {
         };
 
         using AdminRtree = RTree<Admin*, double, 2>;
-        AdminRtree build_admins_tree(const std::vector<Admin*> admins);
+        AdminRtree build_admins_tree(const std::vector<Admin*>);
+        void add_admin_in_tree(AdminRtree&, Admin*);
+        std::vector<Admin*> find_admins_in_tree(AdminRtree&, const type::GeographicalCoord&);
     }
 }

@@ -61,16 +61,19 @@ struct FindAdminWithCities {
 
     boost::shared_ptr<pqxx::connection> conn;
     georef::GeoRef& georef;
+    navitia::georef::AdminRtree added_admin_rtree;
     AdminMap added_admins;
     AdminMap insee_admins_map;
     size_t nb_call = 0;
     size_t nb_uninitialized = 0;
     size_t nb_georef = 0;
+    bool cities_first = false;
     std::map<size_t, size_t> cities_stats;// number of response for size of the result
 
-    FindAdminWithCities(const std::string& connection_string, georef::GeoRef& gr):
+    FindAdminWithCities(const std::string& connection_string, georef::GeoRef& gr, bool cities_first):
         conn(boost::make_shared<pqxx::connection>(connection_string)),
-        georef(gr)
+        georef(gr),
+        cities_first(cities_first)
         {}
 
     FindAdminWithCities(const FindAdminWithCities&) = default;
@@ -114,8 +117,28 @@ struct FindAdminWithCities {
 
         if (!c.is_initialized()) {++nb_uninitialized; return {};}
 
-        const auto &georef_res = georef.find_admins(c, admin_tree);
-        if (!georef_res.empty()) {++nb_georef; return georef_res;}
+        if (cities_first) {
+            const auto& cities_admin = get_admins_from_cities(c);
+            if (!cities_admin.empty()) {return cities_admin;}
+
+            const auto& georef_res = georef.find_admins(c, admin_tree);
+
+            if (!georef_res.empty()) {++nb_georef;}
+            return georef_res;
+        } else {
+            const auto &georef_res = georef.find_admins(c, admin_tree);
+            if (!georef_res.empty()) {++nb_georef; return georef_res;}
+
+            return get_admins_from_cities(c);
+        }
+    }
+
+    result_type get_admins_from_cities(const navitia::type::GeographicalCoord& c) {
+        // search in rtree
+        auto res = find_admins_in_tree(this->added_admin_rtree, c);
+        if (!res.empty()) {
+            return res;
+        }
 
         std::stringstream request;
         request << "SELECT uri, name, insee, level, post_code, "
@@ -125,14 +148,13 @@ struct FindAdminWithCities {
                 << std::setprecision(16) << c.lon() << " " << c.lat() << ")'), boundary, 0.001)";
         pqxx::work work(*conn);
         pqxx::result result = work.exec(request);
-        result_type res;
         for (auto it = result.begin(); it != result.end(); ++it) {
             const std::string uri = it["uri"].as<std::string>();
             const std::string insee = it["insee"].as<std::string>();
             //we try to find the admin in georef by using it's insee code (only work in France)
             navitia::georef::Admin* admin = nullptr;
             if (!insee.empty()) { admin = find_or_default(insee, insee_admins_map);}
-            if (!admin) { admin = find_or_default(uri, added_admins);}
+
             if (!admin) {
                 georef.admins.push_back(new navitia::georef::Admin());
                 admin = georef.admins.back();
@@ -147,11 +169,19 @@ struct FindAdminWithCities {
                 admin->from_original_dataset = false;
                 std::string postal_code;
                 it["post_code"].to(postal_code);
+                if (this->cities_first) {
+                    // if we take the cities from the 'cities' db first, we'll get lot of dupplicates,
+                    // so as an uggly fix we hide them
+                    admin->visible = false;
+                }
 
                 if(!postal_code.empty()){
                     boost::split(admin->postal_codes, postal_code, boost::is_any_of("-"));
                 }
                 added_admins[uri] = admin;
+
+                // we index the admin in the rtree
+                add_admin_in_tree(this->added_admin_rtree, admin);
             }
             res.push_back(admin);
         }
@@ -184,11 +214,13 @@ int ed2nav(int argc, const char * argv[])
         ("cities-connection-string", po::value<std::string>(&cities_connection_string)->default_value(""),
          "cities database connection parameters: host=localhost user=navitia dbname=cities password=navitia")
         ("local_syslog", "activate log redirection within local syslog")
+        ("cities_first", "check in the cities db first, then in the dataset admins")
         ("log_comment", po::value<std::string>(), "optional field to add extra information like coverage name");
 
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
     bool export_georef_edges_geometries(vm.count("full_street_network_geometries"));
+    bool cities_first(vm.count("cities_first"));
 
     if(vm.count("version")){
         std::cout << argv[0] << " " << navitia::config::project_version << " "
@@ -231,7 +263,7 @@ int ed2nav(int argc, const char * argv[])
     ed::EdReader reader(connection_string);
 
     if (!cities_connection_string.empty()) {
-        data.find_admins = FindAdminWithCities(cities_connection_string, *data.geo_ref);
+        data.find_admins = FindAdminWithCities(cities_connection_string, *data.geo_ref, cities_first);
     }
 
     try {

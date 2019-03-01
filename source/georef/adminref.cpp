@@ -65,17 +65,39 @@ std::string Admin::postal_codes_to_string() const{
 
 AdminRtree build_admins_tree(const std::vector<Admin*> admins) {
     AdminRtree admins_tree;
-    double min[2];
-    double max[2];
     for(auto* admin: admins){
-        boost::geometry::model::box<nt::GeographicalCoord> box;
-        boost::geometry::envelope(admin->boundary, box);
-        min[0] = box.min_corner().lon();
-        min[1] = box.min_corner().lat();
-        max[0] = box.max_corner().lon();
-        max[1] = box.max_corner().lat();
-        admins_tree.Insert(min, max, admin);
+        add_admin_in_tree(admins_tree, admin);
     }
     return admins_tree;
+}
+
+void add_admin_in_tree(AdminRtree& rtree, Admin* admin) {
+    double min[2];
+    double max[2];
+    boost::geometry::model::box<nt::GeographicalCoord> box;
+    boost::geometry::envelope(admin->boundary, box);
+    min[0] = box.min_corner().lon();
+    min[1] = box.min_corner().lat();
+    max[0] = box.max_corner().lon();
+    max[1] = box.max_corner().lat();
+    rtree.Insert(min, max, admin);
+}
+
+std::vector<Admin*> find_admins_in_tree(AdminRtree& rtree, const type::GeographicalCoord& coord) {
+    std::vector<Admin*> result;
+
+    auto callback = [](Admin* admin, void* c)->bool{
+        auto* context = reinterpret_cast<std::pair<type::GeographicalCoord, std::vector<Admin*>*>*>(c);
+        if(boost::geometry::within(context->first, admin->boundary)){
+            context->second->push_back(admin);
+        }
+        return true;
+    };
+    double c[2];
+    c[0] = coord.lon();
+    c[1] = coord.lat();
+    auto context = std::make_pair(coord, &result);
+    rtree.Search(c, c, callback, &context);
+    return result;
 }
 }}

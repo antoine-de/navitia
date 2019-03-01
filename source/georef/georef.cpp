@@ -598,24 +598,12 @@ std::vector<Admin*> GeoRef::find_admins(const type::GeographicalCoord& coord) co
 }
 
 std::vector<Admin*> GeoRef::find_admins(const type::GeographicalCoord& coord, AdminRtree& admins_tree) const {
-    std::vector<Admin*> result;
+    const auto result = find_admins_in_tree(admins_tree, coord);
 
-    auto callback = [](Admin* admin, void* c)->bool{
-        auto* context = reinterpret_cast<std::pair<type::GeographicalCoord, std::vector<Admin*>*>*>(c);
-        if(boost::geometry::within(context->first, admin->boundary)){
-            context->second->push_back(admin);
-        }
-        return true;
-    };
-    double c[2];
-    c[0] = coord.lon();
-    c[1] = coord.lat();
-    auto context = std::make_pair(coord, &result);
-    admins_tree.Search(c, c, callback, &context);
     if(!result.empty()){
         return result;
     }
-    //we didn't find any result within the boundary, as a fallback we retrieve the admin of the closest way
+    //we didn't find any result within the rtree, as a fallback we retrieve the admin of the closest way
     return this->find_admins(coord);
 }
 
